@@ -1,0 +1,30 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+<title>#[%dw 2.0 output text/plain --- payload.errorEmail.sub default ((payload.appDetails.env) ++ ' : ' ++ (payload.appDetails.appName) ++ ' - Exception Occurred')]</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body leftmargin="0" marginwidth="0" topmargin="0" marginheight="0">
+<!--<img width="600" height="100" src="data:image/jpeg;base64,#[vars.banner]" alt="Mulesoft">-->
+<img width="600" height="100" src="https://cloud1.email2go.io/f365c0cee72aa186f5a6e0b174cfc256/f0ddae88a9aee9a4aef8b25c3ced70895469ee5ccb89ba709ce460a1b2fe975b.jpg" alt="Mulesoft"
+
+	<br>
+	<h1>Exception Details</h1>
+		<ul>
+			<li>Application Name: #[%dw 2.0 output text/plain --- payload.appDetails.appName default "N/A"]</li>
+			<li>Environment: #[%dw 2.0 output text/plain --- payload.appDetails.env default "N/A"]</li>
+			<li>Flow Name: #[%dw 2.0 output text/plain --- payload.appDetails.flowName default "N/A"]</li>
+			<li>Time: #[now()]</li>
+			<li>Error Type: #[%dw 2.0 output text/plain --- payload.errorType]</li>
+			<li>Error Message: #[%dw 2.0 output text/plain --- payload.errorMessage]</li>
+		</ul>
+		<br>
+	
+	#[%dw 2.0 output text/plain --- payload.errorEmail.body default 'Please contact Support Team for further details']
+ 
+	<h4>
+		Regards <br>
+		Mule Integration <br>	
+	</h4>		
+</body>
+</html>

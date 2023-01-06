@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:email="http://www.mulesoft.org/schema/mule/email"
+	xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:kafka="http://www.mulesoft.org/schema/mule/kafka"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd 
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd 
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/kafka http://www.mulesoft.org/schema/mule/kafka/current/mule-kafka.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+	<kafka:producer-config name="Apache_Kafka_Producer_configuration" doc:name="Apache Kafka Producer configuration" doc:id="b48c7446-429e-4a32-af10-e47888c9b4c2" >
+		<kafka:producer-plaintext-connection >
+			<kafka:bootstrap-servers >
+				<kafka:bootstrap-server value="${kafka.bootstrap.server}" />
+			</kafka:bootstrap-servers>
+		</kafka:producer-plaintext-connection>
+	</kafka:producer-config>
+	<kafka:consumer-config name="Apache_Kafka_Consumer_configuration_queue_errors" doc:name="Apache Kafka Consumer configuration" doc:id="cc592eff-5460-4b3a-9ab8-2c4994a890a4" >
+		<kafka:consumer-plaintext-connection>
+			<kafka:bootstrap-servers >
+				<kafka:bootstrap-server value="${kafka.bootstrap.server}" />
+			</kafka:bootstrap-servers>
+			<kafka:topic-patterns >
+				<kafka:topic-pattern value="queue_errors" />
+			</kafka:topic-patterns>
+		</kafka:consumer-plaintext-connection>
+	</kafka:consumer-config>
+	<kafka:consumer-config name="Apache_Kafka_Consumer_configuration_queue_errors_email" doc:name="Apache Kafka Consumer configuration" doc:id="d8abd976-7858-4f1f-b184-ffeca2e93c0a" >
+		<kafka:consumer-plaintext-connection>
+			<kafka:bootstrap-servers >
+				<kafka:bootstrap-server value="${kafka.bootstrap.server}" />
+			</kafka:bootstrap-servers>
+			<kafka:topic-patterns >
+				<kafka:topic-pattern value="queue_errors_email" />
+			</kafka:topic-patterns>
+		</kafka:consumer-plaintext-connection>
+	</kafka:consumer-config>
+	<kafka:consumer-config name="Apache_Kafka_Consumer_configuration_queue_errors_issue_ticket" doc:name="Apache Kafka Consumer configuration" doc:id="69b7e42b-74d8-4358-b5b0-ee6a484ecf88" >
+		<kafka:consumer-plaintext-connection>
+			<kafka:bootstrap-servers >
+				<kafka:bootstrap-server value="${kafka.bootstrap.server}" />
+			</kafka:bootstrap-servers>
+			<kafka:topic-patterns >
+				<kafka:topic-pattern value="queue_errors_issue_ticket" />
+			</kafka:topic-patterns>
+		</kafka:consumer-plaintext-connection>
+	</kafka:consumer-config>
+	<kafka:consumer-config name="Apache_Kafka_Consumer_configuration_queue_errors_replay" doc:name="Apache Kafka Consumer configuration" doc:id="636ef6b3-eaec-49e4-b801-a76a86e39924" >
+		<kafka:consumer-plaintext-connection>
+			<kafka:bootstrap-servers >
+				<kafka:bootstrap-server value="${kafka.bootstrap.server}" />
+			</kafka:bootstrap-servers>
+			<kafka:topic-patterns >
+				<kafka:topic-pattern value="queue_errors_replay" />
+			</kafka:topic-patterns>
+		</kafka:consumer-plaintext-connection>
+	</kafka:consumer-config>
+	<email:smtp-config name="Email_SMTP_forKafka" doc:name="Email SMTP" doc:id="6833c8c6-96b8-4539-a61b-ae6b1f1feecf" >
+		<email:smtp-connection host="${email.host}" user="${email.user}" password="${secure::email.pwd}" port="${email.port}">
+			<email:properties >
+				<email:property key="mail.smtp.starttls.enable" value="true" />
+			</email:properties>
+		</email:smtp-connection>
+	</email:smtp-config>
+	<flow name="publishMessage-kafka" doc:id="6eb4707d-565c-4ad0-8b27-0eccb4dd9dfb" >
+		<kafka:publish doc:name="Publish" doc:id="ff5c9dbe-e540-4baf-a6b3-3b19467b2a05" config-ref="Apache_Kafka_Producer_configuration" topic="#[vars.routingKey]" key="#[now()]"/>
+	</flow>
+	<flow name="handleError-apacheKafka" doc:id="8ba78e3c-d163-45d3-97e6-8cdf5b3b4e78" >
+	<logger level="INFO" doc:name="Invoking Error Handler Plugin - Apache Kafka" doc:id="3189c525-4faf-49e3-bc06-7686a065873f" message="Invoking Error Handler Plugin" category="handleError-apacheKafka"/>
+		<ee:transform doc:name="Transform Message" doc:id="00323671-f101-40f6-bc74-90bfd62f5cdf" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	errorType: (vars.error.errorObj.errorType.namespace default '') ++ ':' ++ (vars.error.errorObj.errorType.identifier default ''),
+    errorCode: 500,
+    errorMessage: vars.error.customErrorMsg default (vars.error.errorObj.description default ''),
+    errorReplay : vars.error.errorReplay default false,
+	errorEmail : vars.error.errorEmail default false,
+	errorIssueTicket : vars.error.errorIssueTicket default false,
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<set-variable value="queue_errors" doc:name="routingKey" doc:id="cc6e5dda-1f25-4314-ae7f-9878efcdf81f" variableName="routingKey"/>
+		<flow-ref doc:name="publishMessage-kafka" doc:id="6088df36-3267-428f-878f-dfe9659307f6" name="publishMessage-kafka"/>
+	</flow>
+	
+	<flow name="kafka-consumer-orchestrationFlow" doc:id="175d3748-663e-4a78-a95b-4537ae825915" >
+		<kafka:message-listener doc:name="Message listener" doc:id="ab4765af-643c-4ed5-803d-bac85461a042" config-ref="Apache_Kafka_Consumer_configuration_queue_errors"/>
+		<set-payload value='#[output application/json --- read(payload,"application/json")]' doc:name="String to JSON" doc:id="1c7ad245-0358-409a-bc81-0ee9700dd248" />
+		<logger level="INFO" doc:name="Payload" doc:id="b98d21f0-2587-48b6-b700-318e4dba92fa" message="#[payload]" category="kafka-consumer-orchestrationFlow"/>
+		<scatter-gather doc:name="Scatter-Gather" doc:id="5a1f7633-817b-4e8e-96ca-f2b4afe8f50e" >
+			<route >
+				<logger level="INFO" doc:name="Error Replay Check!" doc:id="78cb9f8b-e50f-4049-b156-59c2ec1502a0" message="Error Replay Check!" category="kafka-consumer-orchestrationFlow"/>
+				<flow-ref doc:name="errorReplay-kafka" doc:id="0769e0ff-1519-4e8e-871e-0f0853966593" name="errorReplay-kafka"/>
+			</route>
+			<route >
+				<logger level="INFO" doc:name="Error Email Check!" doc:id="f91f3f98-cbbf-4cbc-b48a-14f9f762e57d" message="Error Email Check!" category="kafka-consumer-orchestrationFlow"/>
+				<flow-ref doc:name="errorEmail-kafka" doc:id="c36cb7d7-0f33-4aa8-b08f-da910805652c" name="errorEmail-kafka"/>
+			</route>
+			<route >
+				<logger level="INFO" doc:name="Error Issue Ticket Check!" doc:id="f3ddf492-53fd-4bd9-ae45-0a8f364c7c61" message="Error Issue Ticket Check!" category="kafka-consumer-orchestrationFlow"/>
+				<flow-ref doc:name="errorTicket-kafka" doc:id="ceb3abb2-c329-4f19-9bf2-9d9384be0674" name="errorTicket-kafka"/>
+			</route>
+		</scatter-gather>
+	</flow>
+	<sub-flow name="errorReplay-kafka" doc:id="2412dab0-0c00-4dbe-82ac-adee56099128" >
+		<choice doc:name="ErrorReplay?" doc:id="11b09b0a-3d84-46ac-8e13-4b4776dd2a7f" >
+			<when expression="#[!isEmpty(payload.errorReplay) and payload.errorReplay]">
+				<logger level="INFO" doc:name="Send the message to Error Replay Queue" doc:id="51760ece-122d-4937-876f-ec869a584b21" message="Send the message to Error Replay Queue" category="errorReplay-kafka"/>
+				<set-variable value="queue_errors_replay" doc:name="routingKey" doc:id="e810c78b-14c1-47fa-ac42-cddaa8eb52c5" variableName="routingKey" />
+				<flow-ref doc:name="publishMessage-kafka" doc:id="08bd9da2-2ea3-45d3-84c3-50e74c075711" name="publishMessage-kafka"/>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Not Required to be sent to Error Replay Queue" doc:id="d4e0cd15-cf50-470a-8ccd-e25301a21e2e" message="Not Required to be sent to Error Replay Queue" category="errorReplay-kafka"/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+	<sub-flow name="errorEmail-kafka" doc:id="f0960eaf-f5bd-4db9-9a10-4bf2e02633f8" >
+		<choice doc:name="ErrorEmail?" doc:id="6fd01a6e-500e-4fa2-9f6b-24bd6d63c4e1" >
+			<when expression="#[!isEmpty(payload.errorEmail)]">
+				<logger level="INFO" doc:name="Send the message to Error Email Queue" doc:id="48aa726c-8d6a-4c69-a6f6-2008b8462678" message="Send the message to Error Email Queue" category="errorEmail-kafka"/>
+				<set-variable value="queue_errors_email" doc:name="routingKey" doc:id="c904311b-4d4a-4de2-a4b7-b095aa2d42fb" variableName="routingKey" />
+				<flow-ref doc:name="publishMessage-kafka" doc:id="72bd123d-b00a-4c0e-b2fa-0f755e6fabb6" name="publishMessage-kafka"/>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Not Required to be sent to Error Email Queue" doc:id="066f51f3-b4ac-4a24-b891-4566b7aabc0d" message="Not Required to be sent to Error Email Queue" category="errorEmail-kafka"/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+	<sub-flow name="errorTicket-kafka" doc:id="4211fdbd-75ec-4746-85a6-0b45ecf0dc34" >
+		<choice doc:name="ErrorReplay?" doc:id="09e6228a-f730-4aa1-81fa-eb0abb604e8e" >
+			<when expression="#[!isEmpty(payload.errorIssueTicket) and payload.errorIssueTicket]">
+				<logger level="INFO" doc:name="Send the message to Error Issue Ticket Queue" doc:id="c4fe83e2-7a1c-4905-a208-65e83f5c0aef" message="Send the message to Error Issue Ticket Queue" category="errorTicket-kafka"/>
+				<set-variable value="queue_errors_issue_ticket" doc:name="routingKey" doc:id="547c8df8-c876-4a97-8f7e-cbda4053e4b3" variableName="routingKey" />
+				<flow-ref doc:name="publishMessage-kafka" doc:id="81ebb8bd-ec8c-4833-ab35-ec439cb35e56" name="publishMessage-kafka"/>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Not Required to be sent to Error Issue Ticket Queue" doc:id="0bf91fb5-962b-4db9-8a4a-247b8e9b807b" message="Not Required to be sent to Error Issue Ticket Queue" category="errorTicket-kafka"/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+	<flow name="kafka-error-replay-consumer" doc:id="4682b357-c323-460c-a91c-28d0a2a87766" >
+		<kafka:message-listener doc:name="Message listener" doc:id="44a2d87f-5355-4ca6-8f17-dc24ed68359b" config-ref="Apache_Kafka_Consumer_configuration_queue_errors_replay"/>
+		<logger level="INFO" doc:name="Consumed Message from queue_errors_replay" doc:id="5faf172c-e4e8-4689-9334-9ffa0fbee96c" message="Consumed Message from queue_errors_replay" category="kafka-error-replay-consumer"/>
+	</flow>
+	<flow name="kafka-error-email-consumer" doc:id="d8fbdc54-197f-45dc-b8e0-037513adeda4" >
+		<kafka:message-listener doc:name="Message listener" doc:id="d2f76ccb-952d-42b8-9b99-8cf7369e1e92" config-ref="Apache_Kafka_Consumer_configuration_queue_errors_email"/>
+		<logger level="INFO" doc:name="Consumed Message from queue_errors_email" doc:id="63ebc3fc-596f-4162-b42e-42abf03ff234" message="Consumed Message from queue_errors_email" category="kafka-error-email-consumer" />
+		<set-payload value='#[output application/json --- read(payload,"application/json")]' doc:name="String to JSON" doc:id="1de33827-d1e6-4de4-a833-9584706e20b2" />
+		<validation:is-true doc:name="Is true" doc:id="dbff23b7-80dc-4c04-a11e-84a8459e7008" expression="#[not isEmpty(payload.errorEmail) and not isBlank(payload.errorEmail.to) and not isBlank(payload.errorEmail.sub) and not isBlank(payload.errorEmail.body) ]" message="Email to / subject / body cannot be Empty"/>
+		<email:send doc:name="Send" doc:id="ce0f17f0-f955-44cb-ba27-d31dfb53c54a" config-ref="Email_SMTP_forKafka" fromAddress="error-handler@noreply.com" subject="#[payload.errorEmail.sub]">
+			<email:to-addresses >
+				<email:to-address value="#[payload.errorEmail.to]" />
+			</email:to-addresses>
+			<email:cc-addresses >
+			</email:cc-addresses>
+			<email:bcc-addresses >
+			</email:bcc-addresses>
+			<email:body contentType="text/html">
+				<email:content ><![CDATA[#["<html> Hi Team, <br> " ++
+"<p>" ++ payload.errorEmail.body ++ "</p>" ++
+"<br>" ++ "Regards" ++ "<br>" ++
+"Mule Integration"]]]></email:content>
+			</email:body>
+		</email:send>
+	</flow>
+	<flow name="kafka-error-ticket-consumer" doc:id="26c3f1ec-612b-4cf8-93fc-b9f541053be0" >
+		<kafka:message-listener doc:name="Message listener" doc:id="2251c705-eb11-4ec5-a405-ae498cac3b40" config-ref="Apache_Kafka_Consumer_configuration_queue_errors_issue_ticket"/>
+		<logger level="INFO" doc:name="Consumed Message from queue_errors_issue_ticket" doc:id="e268f701-bd6d-4966-a3ff-ae953e132669" message="Consumed Message from queue_errors_issue_ticket" category="kafka-error-ticket-consumer" />
+	</flow>
+</mule>

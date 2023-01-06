@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:kafka="http://www.mulesoft.org/schema/mule/kafka"
+	xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+	xmlns:email="http://www.mulesoft.org/schema/mule/email" xmlns:amqp="http://www.mulesoft.org/schema/mule/amqp" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/amqp http://www.mulesoft.org/schema/mule/amqp/current/mule-amqp.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+http://www.mulesoft.org/schema/mule/kafka http://www.mulesoft.org/schema/mule/kafka/current/mule-kafka.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd">
+	<amqp:config name="AMQP_Config" doc:name="AMQP Config" doc:id="d7b8aeb4-a020-4e8c-b221-55a8f50a1296" >
+		<amqp:connection host="${rabbitMQ.host}" port="${rabbitMQ.port}" virtualHost="${rabbitMQ.vHost}" username="${rabbitMQ.uname}" password="${secure::rabbitMQ.pwd}" />
+	</amqp:config>
+	<email:smtp-config name="Email_SMTP_forRabbitMQ" doc:name="Email SMTP" doc:id="c0432cd9-1c55-4293-acda-0c84e346004f" >
+		<email:smtp-connection host="${email.host}" user="${email.user}" password="${secure::email.pwd}" port="${email.port}">
+			<email:properties >
+				<email:property key="mail.smtp.starttls.enable" value="true" />
+			</email:properties>
+		</email:smtp-connection>
+	</email:smtp-config>
+	
+	<!-- <http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="5cd5702c-12b8-4abc-9b6f-05a03a0c5111" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="6b645721-d9e0-4555-923b-829133560c1a" basePath="/test" >
+		<http:request-connection host="localhost" port="8081" />
+	</http:request-config> -->
+	<!-- <flow name="testing-Flow" doc:id="7b5d5c1c-eab2-4506-81cb-8e68e4a7ae1a" >
+		<http:listener doc:name="Listener" doc:id="4b3ca6dc-4913-45a9-a6a0-9320869e2317" config-ref="HTTP_Listener_config" path="/error"/>
+		<http:request method="GET" doc:name="Request" doc:id="c4570452-1f94-4a6b-995b-2fc783b5927a" config-ref="HTTP_Request_configuration" path="/test"/>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="31276870-33e4-4f1e-b318-d1bcefff4ebe" >
+				<ee:transform doc:name="Transform Message" doc:id="72edc8b1-129a-4596-9b5a-e0c810c15641">
+					<ee:message>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="error" ><![CDATA[%dw 2.0
+output application/java
+-&#45;&#45;
+{
+	errorObj : error,
+	customErrorMsg : null,
+	errorReplay :  false,
+	errorEmail : {
+		sub : null,
+		to : "89.rakesh@gmail.com",
+		cc : null,
+		body: null
+	},
+	errorIssueTicket : false,
+	appDetails: {
+		appName : app.name,
+		flowName : flow.name,
+		env : vars.env default "DEV"
+	}
+}]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<flow-ref doc:name="handleError-rabbitMQ" doc:id="ea603969-b6aa-474c-9e2c-52dac9d2512e" name="handleError-rabbitMQ" />
+			</on-error-propagate>
+		</error-handler>
+	</flow> -->
+	<flow name="publishMessage-rabbitMQ" doc:id="a725af16-f1a3-43d7-85e8-2c8306995796" >
+		<amqp:publish doc:name="Publish" doc:id="0742c8f0-821a-4f7b-84f2-c144820a7485" config-ref="AMQP_Config" exchangeName="error-handler">
+			<amqp:routing-keys>
+				<amqp:routing-key value="#[vars.routingKey]" />
+			</amqp:routing-keys>
+		</amqp:publish>
+	</flow>
+	<flow name="handleError-rabbitMQ" doc:id="7b154e0a-61a9-4f4d-964f-90479a049042" >
+		<logger level="INFO" doc:name="Invoking Error Handler Plugin - RabbitMQ" doc:id="4e6fb073-9e10-48e1-999f-f2c8a2fadff4" message="Invoking Error Handler Plugin" category="handleError-rabbitMQ"/>
+		<ee:transform doc:name="Transform Message" doc:id="7e6401eb-bc7a-4418-b6e5-758196b8ad16" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	errorType: (vars.error.errorObj.errorType.namespace default '') ++ ':' ++ (vars.error.errorObj.errorType.identifier default ''),
+    errorCode: 500,
+    errorMessage: vars.error.customErrorMsg default (vars.error.errorObj.description default ''),
+    errorReplay : vars.error.errorReplay default false,
+	errorEmail : vars.error.errorEmail default false,
+	errorIssueTicket : vars.error.errorIssueTicket default false,
+	appDetails: vars.error.appDetails
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<set-variable value="errors" doc:name="routingKey" doc:id="76c89b5b-2230-406c-9fe1-199f93a27fcd" variableName="routingKey"/>
+		<flow-ref doc:name="publishMessage" doc:id="cda4fdff-cdfb-4b40-9db8-2f5280d11a26" name="publishMessage-rabbitMQ"/>
+	</flow>
+	
+	<flow name="rabbitMQ-consumer-orchestrationFlow" doc:id="d7f6b682-5c70-4243-8e53-d6abcf5dda3b" >
+		<amqp:listener doc:name="Listener" doc:id="900d285e-40b2-4e5f-90af-64132505abcf" config-ref="AMQP_Config" queueName="queue_errors" ackMode="AUTO"/>
+		<ee:transform doc:name="Transform Message" doc:id="02b226c8-92c4-4bbc-9136-16145e9e44d4" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Payload" doc:id="2710d96c-8819-49a2-ae24-644e319df22e" message="#[payload]" category="rabbitMQ-consumer-orchestrationFlow"/>
+		<scatter-gather doc:name="Scatter-Gather" doc:id="ba2aeffd-a5ef-4179-a085-ca0651421d41" >
+			<route >
+				<logger level="INFO" doc:name="Error Replay Check!" doc:id="af241f84-9675-4825-8857-699c99eefd7a" message="Error Replay Check!" category="rabbitMQ-consumer-orchestrationFlow"/>
+				<flow-ref doc:name="errorReplay-rabbitMQ" doc:id="8696daff-3f1e-4f68-a5cf-a87a552b970c" name="errorReplay-rabbitMQ"/>
+			</route>
+			<route >
+				<logger level="INFO" doc:name="Error Email Check!" doc:id="af3176d8-181f-439f-94c1-46f66e2f4edd" message="Error Email Check!" category="rabbitMQ-consumer-orchestrationFlow"/>
+				<flow-ref doc:name="errorEmail-rabbitMQ" doc:id="4d8813ef-a0c1-45ce-b32c-0a156b5fb170" name="errorEmail-rabbitMQ"/>
+			</route>
+			<route >
+				<logger level="INFO" doc:name="Error Issue Ticket Check!" doc:id="a5c97566-c591-4c6f-96c4-3929ff9c23d1" message="Error Issue Ticket Check!" category="rabbitMQ-consumer-orchestrationFlow"/>
+				<flow-ref doc:name="errorTicket-rabbitMQ" doc:id="2f7a7666-97a1-47d3-9f7b-c0ba5e226b8f" name="errorTicket-rabbitMQ"/>
+			</route>
+		</scatter-gather>
+	</flow>
+	<sub-flow name="errorReplay-rabbitMQ" doc:id="66b6734d-0ef9-4005-9849-0004e258eeb8" >
+		<choice doc:name="ErrorReplay?" doc:id="ab2bf039-c02d-48f7-a4a2-fcb31c7e3648" >
+			<when expression="#[!isEmpty(payload.errorReplay) and payload.errorReplay]">
+				<logger level="INFO" doc:name="Send the message to Error Replay Queue" doc:id="1f9c7af1-d049-4b36-a58c-b0e7bc8491cb" message="Send the message to Error Replay Queue" category="errorReplay-rabbitMQ"/>
+				<set-variable value="replay" doc:name="routingKey" doc:id="bb127c78-096d-47b6-bce3-16f45cad65ad" variableName="routingKey" />
+				<flow-ref doc:name="publishMessage" doc:id="1d6d2a33-f367-4b50-b265-e75f8952b924" name="publishMessage-rabbitMQ"/>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Not Required to be sent to Error Replay Queue" doc:id="efa6caab-05f8-4ccc-bbca-c5d2625405a8" message="Not Required to be sent to Error Replay Queue" category="errorReplay-rabbitMQ"/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+	<sub-flow name="errorEmail-rabbitMQ" doc:id="a97e9212-f3cb-44a0-9123-81bf9a6b9056" >
+		<choice doc:name="ErrorEmail?" doc:id="fca348b7-3817-4cdb-befc-a3efcbebae91" >
+			<when expression="#[!isEmpty(payload.errorEmail)]">
+				<logger level="INFO" doc:name="Send the message to Error Email Queue" doc:id="96e83978-12c0-4b1f-b1e0-984be741f213" message="Send the message to Error Email Queue" category="errorEmail-rabbitMQ"/>
+				<set-variable value="email" doc:name="routingKey" doc:id="b199e737-a05b-4a3b-a3f7-07e2bda78baa" variableName="routingKey" />
+				<flow-ref doc:name="publishMessage" doc:id="6db42d56-7648-467d-ad0f-2b643e9e5b4e" name="publishMessage-rabbitMQ"/>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Not Required to be sent to Error Email Queue" doc:id="fe7f4588-50f4-4947-9bf5-066a7a4034bf" message="Not Required to be sent to Error Email Queue" category="errorEmail-rabbitMQ"/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+	<sub-flow name="errorTicket-rabbitMQ" doc:id="c19da207-be12-4a4a-aecc-ffc7f2c65774" >
+		<choice doc:name="ErrorReplay?" doc:id="f917cdeb-31ff-4409-bc8c-6b75acc96bf9" >
+			<when expression="#[!isEmpty(payload.errorIssueTicket) and payload.errorIssueTicket]">
+				<logger level="INFO" doc:name="Send the message to Error Issue Ticket Queue" doc:id="86a23cf4-b419-4794-b933-7dcaa4e8467b" message="Send the message to Error Issue Ticket Queue" category="errorTicket-rabbitMQ"/>
+				<set-variable value="ticket" doc:name="routingKey" doc:id="769caefd-8f18-46b4-b0c4-154b7fce6db3" variableName="routingKey" />
+				<flow-ref doc:name="publishMessage" doc:id="a6133c5f-fd47-4056-be84-a83277d83656" name="publishMessage-rabbitMQ"/>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Not Required to be sent to Error Issue Ticket Queue" doc:id="82581445-ba7f-475a-a3d1-8c242f345f42" message="Not Required to be sent to Error Issue Ticket Queue" category="errorTicket-rabbitMQ"/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+	<flow name="rabbitMQ-error-replay-consumer" doc:id="8f1611cc-dcd9-4da5-81a0-ca4bf54206e4" >
+		<amqp:listener doc:name="Listener" doc:id="a4bf16fb-e0d7-4307-bdec-334ed28c923b" config-ref="AMQP_Config" queueName="queue_errors_replay" ackMode="AUTO"/>
+		<logger level="INFO" doc:name="Consumed Message from queue_errors_replay" doc:id="860f93cf-def2-47ee-a409-b1e14c4ac524" message="Consumed Message from queue_errors_replay" category="rabbitMQ-error-replay-consumer"/>
+	</flow>
+	<flow name="rabbitMQ-error-email-consumer" doc:id="54aa4cff-a660-45f9-b285-28be2e08e397" >
+		<amqp:listener doc:name="Listener" doc:id="48026bdc-e7ea-4221-ab17-8c53191c223d" config-ref="AMQP_Config" queueName="queue_errors_email" ackMode="AUTO"/>
+		<logger level="INFO" doc:name="Consumed Message from queue_errors_email" doc:id="3a82f576-ecf5-4fd9-8432-42fa10386f28" message="Consumed Message from queue_errors_email" category="rabbitMQ-error-email-consumer" />
+		<validation:is-true doc:name="Is true" doc:id="9a03beff-35d6-4db6-b060-fc0fdf94bd2f" expression="#[not isEmpty(payload.errorEmail) and not isBlank(payload.errorEmail.to) ]" message="Email to / subject / body cannot be Empty"/>
+<!-- [STUDIO:"Transform Message"]		<ee:transform doc:name="Transform Message" doc:id="e94ef10a-b3dd-4398-b453-b0439a3f2414" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="banner" ><![CDATA[%dw 2.0
+output text/plain
+import toBase64 from dw::core::Binaries
+var image = readUrl("classpath://mule-banner.jpeg", "application/octet-stream")
+&#45;&#45;-
+toBase64(image as Binary)
+]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform> [STUDIO] -->
+		<parse-template doc:name="Parse Template" doc:id="04c97522-89a2-4800-888f-ae7202966e2c" location="emailTemplate.html" target="body" targetValue="#[payload]"/>
+		<email:send doc:name="Send" doc:id="95f848f2-feb6-4051-9277-b4f19ff11a98" config-ref="Email_SMTP_forRabbitMQ" fromAddress="error-handler@noreply.com" subject="#[payload.errorEmail.sub default ((payload.appDetails.env) ++ ' : ' ++ (payload.appDetails.appName) ++ ' - Exception Occurred')]">
+			<email:to-addresses >
+				<email:to-address value="#[payload.errorEmail.to]" />
+			</email:to-addresses>
+			<email:cc-addresses >
+				<email:cc-address value='#[payload.errorEmail.cc default payload.errorEmail.to]' />
+			</email:cc-addresses>
+			<email:bcc-addresses >
+			</email:bcc-addresses>
+			<email:body contentType="text/html">
+				<email:content ><![CDATA[#[vars.body]]]></email:content>
+			</email:body>
+		</email:send>
+	</flow>
+	<flow name="rabbitMQ-error-ticket-consumer" doc:id="5cbdfa45-5b1b-4109-881f-e48bd85ed7b9" >
+		<amqp:listener doc:name="Listener" doc:id="a2d7479e-7dbe-4917-9a01-0afee6559608" config-ref="AMQP_Config" queueName="queue_errors_issue_ticket" ackMode="AUTO"/>
+		<logger level="INFO" doc:name="Consumed Message from queue_errors_issue_ticket" doc:id="de9868f0-1201-45c7-97fa-e376e3d004cb" message="Consumed Message from queue_errors_issue_ticket" category="rabbitMQ-error-ticket-consumer" />
+	</flow>
+	
+</mule>
