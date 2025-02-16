@@ -1,6 +1,6 @@
 # Error Handler Plugin
 
-Error Handling Plugin is a framework that facilitate the handling of errors produced by any Mule application. This includes both technical and business errors. 
+Error Handling Plugin is a framework that facilitates the handling of errors produced by any MuleSoft application. This includes both technical and business errors. 
 
 The objective of the Error Handling Plugin is to centralize the error handling mechanism and to provide operation units facility to identify and configure the error handling rule. The current framework incorporates replaying, email notification and support ticket creation features.
 
@@ -154,11 +154,11 @@ Once the payload is created, use a flow Reference to invoke:
 ## 1.0.0 version - Release notes
 
 **Features:**
-* Reduces development effort and hours, which eventually saves money.
-  Separates error handling logic from the application, making maintenance simpler.
+* Reduces development effort and hours, which ultimately saves money.
+* Separates error handling logic from the application, making maintenance simpler.
 * Enhances the agility of the team to bring new products and features as the team does not need to consider error handling.
 * Gives better visibility as to why an error occurred.
-* Has the ability to send an email with the error details
+* Has the ability to send an email with the error details.
 * It’s very easy to install, easy to manage and easy to customize.
 
 **Upcoming Features:**
@@ -166,6 +166,7 @@ Once the payload is created, use a flow Reference to invoke:
 * Has the ability to create an issue ticket by itself and assign it to a group.
 
 ## Author
+* Liem Nguyen
 
 ## Support disclaimer
 It won't be officially supported by MuleSoft as it is considered a custom connector. 
